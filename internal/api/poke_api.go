@@ -4,13 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/NeriusZar/pokedexcli/internal/models"
+	"github.com/NeriusZar/pokedexcli/internal/pokecache"
 )
+
+const pokeApiBaseUrl = "https://pokeapi.co/api/v2"
+const cacheInterval = time.Second * 5
 
 type AreaResponse struct {
 	Count    int     `json:"count"`
-	Next     string  `json:"next"`
+	Next     *string `json:"next"`
 	Previous *string `json:"previous"`
 	Results  []struct {
 		Name string `json:"name"`
@@ -18,12 +23,31 @@ type AreaResponse struct {
 	} `json:"results"`
 }
 
-const pokeApiBaseUrl = "https://pokeapi.co/api/v2"
+type PokeApi struct {
+	cache  pokecache.Cache
+	client http.Client
+}
 
-func RetrieveAreas(url string) ([]models.Area, models.Pagination, error) {
-	if url == "" {
-		areasPath := "/location-area"
-		url = pokeApiBaseUrl + areasPath
+func NewPokeApi() PokeApi {
+	return PokeApi{
+		cache:  pokecache.NewCache(cacheInterval),
+		client: http.Client{},
+	}
+}
+
+func (api *PokeApi) RetrieveAreas(pageUrl *string) ([]models.Area, models.Pagination, error) {
+	areasPath := "/location-area"
+	url := pokeApiBaseUrl + areasPath
+	if pageUrl != nil {
+		url = *pageUrl
+	}
+
+	if entry, ok := api.cache.Get(url); ok {
+		var areaResponse AreaResponse
+		if err := json.Unmarshal(entry, &areaResponse); err == nil {
+			areas, pagination := mapResponse(areaResponse)
+			return areas, pagination, nil
+		}
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -31,8 +55,7 @@ func RetrieveAreas(url string) ([]models.Area, models.Pagination, error) {
 		return []models.Area{}, models.Pagination{}, err
 	}
 
-	client := http.Client{}
-	res, err := client.Do(req)
+	res, err := api.client.Do(req)
 	if err != nil {
 		return []models.Area{}, models.Pagination{}, err
 	}
@@ -46,15 +69,17 @@ func RetrieveAreas(url string) ([]models.Area, models.Pagination, error) {
 		return []models.Area{}, models.Pagination{}, err
 	}
 
-	pagination := models.Pagination{
-		Next:     areaResponse.Next,
-		Previous: areaResponse.Previous,
+	entry, err := json.Marshal(areaResponse)
+	if err != nil {
+		return []models.Area{}, models.Pagination{}, err
 	}
+	api.cache.Add(url, entry)
 
-	return mapAreasFromResponse(areaResponse), pagination, nil
+	areas, pagination := mapResponse(areaResponse)
+	return areas, pagination, nil
 }
 
-func mapAreasFromResponse(res AreaResponse) []models.Area {
+func mapResponse(res AreaResponse) ([]models.Area, models.Pagination) {
 	areas := make([]models.Area, len(res.Results))
 
 	for i, r := range res.Results {
@@ -64,5 +89,10 @@ func mapAreasFromResponse(res AreaResponse) []models.Area {
 		}
 	}
 
-	return areas
+	pagination := models.Pagination{
+		Next:     res.Next,
+		Previous: res.Previous,
+	}
+
+	return areas, pagination
 }

@@ -4,13 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-
-	"github.com/NeriusZar/pokedexcli/internal/models"
 )
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
-	pagination := models.Pagination{}
+	config := NewConfig()
 	commands := getCommands()
 
 	for {
@@ -25,7 +23,7 @@ func main() {
 				continue
 			}
 
-			err := command.callback(&pagination)
+			err := command.callback(&config)
 			if err != nil {
 				fmt.Println("Failed to execute command")
 			}

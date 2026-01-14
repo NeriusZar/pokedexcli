@@ -6,6 +6,6 @@ type Area struct {
 }
 
 type Pagination struct {
-	Next     string
+	Next     *string
 	Previous *string
 }

@@ -11,7 +11,19 @@ import (
 type CliCommand struct {
 	name        string
 	description string
-	callback    func(*models.Pagination) (error)
+	callback    func(*config) error
+}
+
+type config struct {
+	pagination models.Pagination
+	api        api.PokeApi
+}
+
+func NewConfig() config {
+	return config{
+		pagination: models.Pagination{},
+		api:        api.NewPokeApi(),
+	}
 }
 
 func getCommands() map[string]CliCommand {
@@ -39,13 +51,13 @@ func getCommands() map[string]CliCommand {
 	}
 }
 
-func commandExit(p *models.Pagination) error {
+func commandExit(c *config) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(p *models.Pagination) error {
+func commandHelp(c *config) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Printf("Usage:\n\n")
 
@@ -55,14 +67,14 @@ func commandHelp(p *models.Pagination) error {
 	return nil
 }
 
-func commandMap(p *models.Pagination) error {
-	areas, pagination, err := api.RetrieveAreas(p.Next)
+func commandMap(c *config) error {
+	areas, pagination, err := c.api.RetrieveAreas(c.pagination.Next)
 	if err != nil {
 		return err
 	}
 
-	p.Next = pagination.Next
-	p.Previous = pagination.Previous
+	c.pagination.Next = pagination.Next
+	c.pagination.Previous = pagination.Previous
 
 	for _, a := range areas {
 		fmt.Println(a.Name)
@@ -70,19 +82,19 @@ func commandMap(p *models.Pagination) error {
 	return nil
 }
 
-func commandMapb(p *models.Pagination) error {
-	if p.Previous == nil {
+func commandMapb(c *config) error {
+	if c.pagination.Previous == nil {
 		fmt.Println("you're on the first page")
 		return nil
 	}
 
-	areas, pagination, err := api.RetrieveAreas(*p.Previous)
+	areas, pagination, err := c.api.RetrieveAreas(c.pagination.Previous)
 	if err != nil {
 		return err
 	}
 
-	p.Next = pagination.Next
-	p.Previous = pagination.Previous
+	c.pagination.Next = pagination.Next
+	c.pagination.Previous = pagination.Previous
 
 	for _, a := range areas {
 		fmt.Println(a.Name)
