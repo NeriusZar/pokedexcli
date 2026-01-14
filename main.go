@@ -23,9 +23,9 @@ func main() {
 				continue
 			}
 
-			err := command.callback(&config)
+			err := command.callback(&config, cleanedInput[1:]...)
 			if err != nil {
-				fmt.Println("Failed to execute command")
+				fmt.Println("Failed to execute command", err)
 			}
 		}
 	}

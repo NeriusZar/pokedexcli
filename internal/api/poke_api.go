@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -11,17 +13,9 @@ import (
 )
 
 const pokeApiBaseUrl = "https://pokeapi.co/api/v2"
+const locationAreasPath = "/location-area"
+const pokemonDetailsPath = "/pokemon"
 const cacheInterval = time.Second * 5
-
-type AreaResponse struct {
-	Count    int     `json:"count"`
-	Next     *string `json:"next"`
-	Previous *string `json:"previous"`
-	Results  []struct {
-		Name string `json:"name"`
-		URL  string `json:"url"`
-	} `json:"results"`
-}
 
 type PokeApi struct {
 	cache  pokecache.Cache
@@ -36,8 +30,7 @@ func NewPokeApi() PokeApi {
 }
 
 func (api *PokeApi) RetrieveAreas(pageUrl *string) ([]models.Area, models.Pagination, error) {
-	areasPath := "/location-area"
-	url := pokeApiBaseUrl + areasPath
+	url := pokeApiBaseUrl + locationAreasPath
 	if pageUrl != nil {
 		url = *pageUrl
 	}
@@ -45,7 +38,7 @@ func (api *PokeApi) RetrieveAreas(pageUrl *string) ([]models.Area, models.Pagina
 	if entry, ok := api.cache.Get(url); ok {
 		var areaResponse AreaResponse
 		if err := json.Unmarshal(entry, &areaResponse); err == nil {
-			areas, pagination := mapResponse(areaResponse)
+			areas, pagination := mapAreasResponse(areaResponse)
 			return areas, pagination, nil
 		}
 	}
@@ -75,11 +68,11 @@ func (api *PokeApi) RetrieveAreas(pageUrl *string) ([]models.Area, models.Pagina
 	}
 	api.cache.Add(url, entry)
 
-	areas, pagination := mapResponse(areaResponse)
+	areas, pagination := mapAreasResponse(areaResponse)
 	return areas, pagination, nil
 }
 
-func mapResponse(res AreaResponse) ([]models.Area, models.Pagination) {
+func mapAreasResponse(res AreaResponse) ([]models.Area, models.Pagination) {
 	areas := make([]models.Area, len(res.Results))
 
 	for i, r := range res.Results {
@@ -95,4 +88,103 @@ func mapResponse(res AreaResponse) ([]models.Area, models.Pagination) {
 	}
 
 	return areas, pagination
+}
+
+func (api *PokeApi) RetrievePokemonsInArea(area string) ([]models.PokemonShortInfo, error) {
+	url := pokeApiBaseUrl + locationAreasPath + "/" + area
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return []models.PokemonShortInfo{}, err
+	}
+
+	if entry, ok := api.cache.Get(url); ok {
+		var areaDetailsResponse AreaDetailsResponse
+		if err := json.Unmarshal(entry, &areaDetailsResponse); err == nil {
+			return mapPokemonsResponse(areaDetailsResponse), nil
+		}
+	}
+
+	res, err := api.client.Do(req)
+	if err != nil {
+		return []models.PokemonShortInfo{}, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return []models.PokemonShortInfo{}, errors.New("Failed to fetch pokemons in area")
+	}
+	defer res.Body.Close()
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return []models.PokemonShortInfo{}, errors.New("Failed to fetch pokemons in area")
+	}
+
+	var areaDetailsResponse AreaDetailsResponse
+	if err := json.Unmarshal(data, &areaDetailsResponse); err != nil {
+		return []models.PokemonShortInfo{}, err
+	}
+
+	api.cache.Add(url, data)
+
+	return mapPokemonsResponse(areaDetailsResponse), nil
+}
+
+func mapPokemonsResponse(res AreaDetailsResponse) []models.PokemonShortInfo {
+	pokemons := make([]models.PokemonShortInfo, len(res.PokemonEncounters))
+
+	for i, p := range res.PokemonEncounters {
+		pokemons[i] = models.PokemonShortInfo{
+			Name: p.Pokemon.Name,
+			Url:  p.Pokemon.URL,
+		}
+	}
+
+	return pokemons
+}
+
+func (api *PokeApi) GetPokemonDetails(name string) (models.Pokemon, error) {
+	url := pokeApiBaseUrl + pokemonDetailsPath + "/" + name
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return models.Pokemon{}, err
+	}
+
+	if entry, ok := api.cache.Get(url); ok {
+		var pokemonDetailsResponse PokemonDetailsResponse
+		if err := json.Unmarshal(entry, &pokemonDetailsResponse); err == nil {
+			return mapPokemonDetailsResponse(pokemonDetailsResponse), nil
+		}
+	}
+
+	res, err := api.client.Do(req)
+	if err != nil {
+		return models.Pokemon{}, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return models.Pokemon{}, errors.New("Failed to fetch pokemon details")
+	}
+	defer res.Body.Close()
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return models.Pokemon{}, errors.New("Failed to fetch pokemon details")
+	}
+
+	var pokemonDetailsResponse PokemonDetailsResponse
+	if err := json.Unmarshal(data, &pokemonDetailsResponse); err != nil {
+		return models.Pokemon{}, err
+	}
+
+	api.cache.Add(url, data)
+
+	return mapPokemonDetailsResponse(pokemonDetailsResponse), nil
+}
+
+func mapPokemonDetailsResponse(res PokemonDetailsResponse) models.Pokemon {
+	return models.Pokemon{
+		ID:             res.ID,
+		Name:           res.Name,
+		BaseExperience: res.BaseExperience,
+	}
 }
