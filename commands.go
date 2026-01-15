@@ -208,6 +208,7 @@ func inspect(c *config, a ...string) error {
 	return nil
 }
 
+//Command to print all Pokemons
 func pokedexCmd(c *config, a ...string) error {
 	fmt.Println("Your Pokedex:")
 
