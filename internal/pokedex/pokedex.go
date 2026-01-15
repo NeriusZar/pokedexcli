@@ -7,13 +7,13 @@ import (
 )
 
 type Pokedex struct {
-	Pokemons map[string]models.Pokemon
+	pokemons map[string]models.Pokemon
 	mu       *sync.Mutex
 }
 
 func NewPokedex() Pokedex {
 	return Pokedex{
-		Pokemons: map[string]models.Pokemon{},
+		pokemons: map[string]models.Pokemon{},
 		mu:       &sync.Mutex{},
 	}
 }
@@ -22,13 +22,25 @@ func (p Pokedex) Add(pokemon models.Pokemon) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.Pokemons[pokemon.Name] = pokemon
+	p.pokemons[pokemon.Name] = pokemon
 }
 
 func (p Pokedex) Get(name string) (models.Pokemon, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	pokemon, ok := p.Pokemons[name]
+	pokemon, ok := p.pokemons[name]
 	return pokemon, ok
+}
+
+func (p Pokedex) GetAll() []models.Pokemon {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	pokemons := make([]models.Pokemon, 0, len(p.pokemons))
+	for _, v := range p.pokemons {
+		pokemons = append(pokemons, v)
+	}
+
+	return pokemons
 }
