@@ -182,9 +182,29 @@ func (api *PokeApi) GetPokemonDetails(name string) (models.Pokemon, error) {
 }
 
 func mapPokemonDetailsResponse(res PokemonDetailsResponse) models.Pokemon {
-	return models.Pokemon{
+	pokemon := models.Pokemon{
 		ID:             res.ID,
 		Name:           res.Name,
 		BaseExperience: res.BaseExperience,
+		Weight:         res.Weight,
+		Height:         res.Height,
 	}
+
+	stats := make([]models.PokemonStat, len(res.Stats))
+	for i, s := range res.Stats {
+		stats[i] = models.PokemonStat{
+			Name:     s.Stat.Name,
+			BaseStat: s.BaseStat,
+		}
+	}
+
+	types := make([]string, len(res.Types))
+	for i, t := range res.Types {
+		types[i] = t.Type.Name
+	}
+
+	pokemon.Stats = stats
+	pokemon.Types = types
+
+	return pokemon
 }

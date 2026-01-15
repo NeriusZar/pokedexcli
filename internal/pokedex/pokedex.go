@@ -24,3 +24,11 @@ func (p Pokedex) Add(pokemon models.Pokemon) {
 
 	p.Pokemons[pokemon.Name] = pokemon
 }
+
+func (p Pokedex) Get(name string) (models.Pokemon, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	pokemon, ok := p.Pokemons[name]
+	return pokemon, ok
+}
